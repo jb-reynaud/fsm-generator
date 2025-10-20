@@ -9,6 +9,8 @@ use FSM\Exceptions\InvalidStateException;
 use FSM\Exceptions\InvalidSymbolException;
 use FSM\Exceptions\MissingTransitionException;
 use FSM\FiniteStateMachine;
+use FSM\Tests\Fixtures\StateEnum;
+use FSM\Tests\Fixtures\StateObject;
 use PHPUnit\Framework\TestCase;
 
 class FiniteStateMachineTest extends TestCase
@@ -130,23 +132,23 @@ class FiniteStateMachineTest extends TestCase
     }
 
     /**
-     * @param array<int, mixed> $states
+     * @param array<int, int|string|bool|float|object|array<array-key, mixed>|null> $states
      * @param array<int, string> $alphabet
-     * @param array<int, mixed> $finalStates
+     * @param int|string|bool|float|object|array<array-key, mixed>|null $initialState
+     * @param array<int, int|string|bool|float|object|array<array-key, mixed>|null> $finalStates
      *
      * @dataProvider invalidConfigurationDataProvider
      */
     public function testInvalidConfigurationThrowsException(
         array $states,
         array $alphabet,
-        mixed $initialState,
+        int|string|bool|float|object|array|null $initialState,
         array $finalStates,
         string $expectedMessage
     ): void {
         $this->expectException(InvalidConfigurationException::class);
         $this->expectExceptionMessage($expectedMessage);
 
-        // @phpstan-ignore-next-line argument.type
         new FiniteStateMachine(
             states: $states,
             alphabet: $alphabet,
@@ -157,7 +159,7 @@ class FiniteStateMachineTest extends TestCase
     }
 
     /**
-     * @return array<string, array{array<int, mixed>, array<string>, mixed, array<int, mixed>, string}>
+     * @return array<string, array{array<int, int|string|bool|float|object|array<array-key, mixed>|null>, array<string>, int|string|bool|float|object|array<array-key, mixed>|null, array<int, int|string|bool|float|object|array<array-key, mixed>|null>, string}>
      */
     public static function invalidConfigurationDataProvider(): array
     {
@@ -306,5 +308,253 @@ class FiniteStateMachineTest extends TestCase
             // State should be restored to initial state
             $this->assertEquals('S0', $fsm->getCurrentState());
         }
+    }
+
+    /**
+     * @dataProvider mixedStateTypesDataProvider
+     * @param array<int, int|string|bool|float|object|array<array-key, mixed>|null> $states
+     * @param int|string|bool|float|object|array<array-key, mixed>|null $initialState
+     * @param array<int, int|string|bool|float|object|array<array-key, mixed>|null> $finalStates
+     * @param int|string|bool|float|object|array<array-key, mixed>|null $expectedFinalState
+     */
+    public function testMixedStateTypes(
+        array $states,
+        int|string|bool|float|object|array|null $initialState,
+        array $finalStates,
+        callable $transitionFunction,
+        string $input,
+        int|string|bool|float|object|array|null $expectedFinalState
+    ): void {
+        $fsm = new FiniteStateMachine(
+            states: $states,
+            alphabet: ['0', '1'],
+            initialState: $initialState,
+            finalStates: $finalStates,
+            transitionFunction: $transitionFunction
+        );
+
+        $result = $fsm->processSequence($input);
+        $this->assertEquals($expectedFinalState, $result);
+    }
+
+    /**
+     * @return array<string, array{array<int, int|string|bool|float|object|array<array-key, mixed>|null>, int|string|bool|float|object|array<array-key, mixed>|null, array<int, int|string|bool|float|object|array<array-key, mixed>|null>, callable, string, int|string|bool|float|object|array<array-key, mixed>|null}>
+     */
+    public static function mixedStateTypesDataProvider(): array
+    {
+        $objA = new StateObject('A');
+        $objB = new StateObject('B');
+        $objC = new StateObject('C');
+
+        return [
+            'integer states' => [
+                [0, 1, 2],
+                0,
+                [0, 1, 2],
+                fn (int $state, string $symbol): int => match ([$state, $symbol]) {
+                    [0, '0'] => 0,
+                    [0, '1'] => 1,
+                    [1, '0'] => 2,
+                    [1, '1'] => 0,
+                    [2, '0'] => 1,
+                    [2, '1'] => 2,
+                    default => throw new \Error("Invalid transition"),
+                },
+                '101',
+                2,
+            ],
+            'boolean states' => [
+                [true, false],
+                true,
+                [true],
+                fn (bool $state, string $symbol): bool => match ([$state, $symbol]) {
+                    [true, '0'] => true,
+                    [true, '1'] => false,
+                    [false, '0'] => false,
+                    [false, '1'] => true,
+                    default => throw new \Error("Invalid transition"),
+                },
+                '11',
+                true,
+            ],
+            'float states' => [
+                [0.0, 1.5, 2.7],
+                0.0,
+                [0.0],
+                fn (float $state, string $symbol): float => match ([$state, $symbol]) {
+                    [0.0, '0'] => 0.0,
+                    [0.0, '1'] => 1.5,
+                    [1.5, '0'] => 2.7,
+                    [1.5, '1'] => 0.0,
+                    [2.7, '0'] => 1.5,
+                    [2.7, '1'] => 2.7,
+                    default => throw new \Error("Invalid transition"),
+                },
+                '1',
+                1.5,
+            ],
+            'array states' => [
+                [['state' => 'A'], ['state' => 'B']],
+                ['state' => 'A'],
+                [['state' => 'A']],
+                fn (array $state, string $symbol): array => match ([$state['state'], $symbol]) {
+                    ['A', '0'] => ['state' => 'A'],
+                    ['A', '1'] => ['state' => 'B'],
+                    ['B', '0'] => ['state' => 'A'],
+                    ['B', '1'] => ['state' => 'B'],
+                    default => throw new \Error("Invalid transition"),
+                },
+                '1',
+                ['state' => 'B'],
+            ],
+            'object states' => [
+                [$objA, $objB, $objC],
+                $objA,
+                [$objA, $objC],
+                fn (StateObject $state, string $symbol): StateObject => match ([$state->name, $symbol]) {
+                    ['A', '0'] => $objA,
+                    ['A', '1'] => $objB,
+                    ['B', '0'] => $objC,
+                    ['B', '1'] => $objA,
+                    ['C', '0'] => $objB,
+                    ['C', '1'] => $objC,
+                    default => throw new \Error("Invalid transition"),
+                },
+                '10',
+                $objC,
+            ],
+            'enum states' => [
+                [StateEnum::IDLE, StateEnum::RUNNING, StateEnum::STOPPED],
+                StateEnum::IDLE,
+                [StateEnum::IDLE, StateEnum::STOPPED],
+                fn (StateEnum $state, string $symbol): StateEnum => match ([$state, $symbol]) {
+                    [StateEnum::IDLE, '0'] => StateEnum::IDLE,
+                    [StateEnum::IDLE, '1'] => StateEnum::RUNNING,
+                    [StateEnum::RUNNING, '0'] => StateEnum::STOPPED,
+                    [StateEnum::RUNNING, '1'] => StateEnum::IDLE,
+                    [StateEnum::STOPPED, '0'] => StateEnum::RUNNING,
+                    [StateEnum::STOPPED, '1'] => StateEnum::STOPPED,
+                    default => throw new \Error("Invalid transition"),
+                },
+                '10',
+                StateEnum::STOPPED,
+            ],
+            'mixed types' => [
+                [0, 'ONE', 2, null],
+                0,
+                [0, 2],
+                fn (int|string|null $state, string $symbol): int|string|null => match ([$state, $symbol]) {
+                    [0, '0'] => 0,
+                    [0, '1'] => 'ONE',
+                    ['ONE', '0'] => 2,
+                    ['ONE', '1'] => 0,
+                    [2, '0'] => 'ONE',
+                    [2, '1'] => null,
+                    [null, '0'] => 0,
+                    [null, '1'] => null,
+                    default => throw new \Error("Invalid transition"),
+                },
+                '101',
+                null,
+            ],
+        ];
+    }
+
+    /**
+     * @dataProvider mixedStateTypesValidationDataProvider
+     * @param array<int, int|string|bool|float|object|array<array-key, mixed>|null> $states
+     * @param int|string|bool|float|object|array<array-key, mixed>|null $initialState
+     */
+    public function testValidateAllTransitionsWithMixedTypes(
+        array $states,
+        int|string|bool|float|object|array|null $initialState,
+        callable $transitionFunction
+    ): void {
+        $fsm = new FiniteStateMachine(
+            states: $states,
+            alphabet: ['0', '1'],
+            initialState: $initialState,
+            finalStates: $states,
+            transitionFunction: $transitionFunction
+        );
+
+        // Should not throw any exception
+        $fsm->validateAllTransitions();
+
+        // Verify the current state is unchanged
+        $this->assertEquals($initialState, $fsm->getCurrentState());
+    }
+
+    /**
+     * @return array<string, array{array<int, int|string|bool|float|object|array<array-key, mixed>|null>, int|string|bool|float|object|array<array-key, mixed>|null, callable}>
+     */
+    public static function mixedStateTypesValidationDataProvider(): array
+    {
+        $objA = new StateObject('A');
+        $objB = new StateObject('B');
+
+        return [
+            'integer states validation' => [
+                [0, 1, 2],
+                0,
+                fn (int $state, string $symbol): int => match ([$state, $symbol]) {
+                    [0, '0'] => 0,
+                    [0, '1'] => 1,
+                    [1, '0'] => 2,
+                    [1, '1'] => 0,
+                    [2, '0'] => 1,
+                    [2, '1'] => 2,
+                    default => throw new \Error("Invalid transition"),
+                },
+            ],
+            'boolean states validation' => [
+                [true, false],
+                true,
+                fn (bool $state, string $symbol): bool => match ([$state, $symbol]) {
+                    [true, '0'] => true,
+                    [true, '1'] => false,
+                    [false, '0'] => false,
+                    [false, '1'] => true,
+                    default => throw new \Error("Invalid transition"),
+                },
+            ],
+            'object states validation' => [
+                [$objA, $objB],
+                $objA,
+                fn (StateObject $state, string $symbol): StateObject => match ([$state->name, $symbol]) {
+                    ['A', '0'] => $objA,
+                    ['A', '1'] => $objB,
+                    ['B', '0'] => $objA,
+                    ['B', '1'] => $objB,
+                    default => throw new \Error("Invalid transition"),
+                },
+            ],
+            'enum states validation' => [
+                [StateEnum::IDLE, StateEnum::RUNNING, StateEnum::STOPPED],
+                StateEnum::IDLE,
+                fn (StateEnum $state, string $symbol): StateEnum => match ([$state, $symbol]) {
+                    [StateEnum::IDLE, '0'] => StateEnum::IDLE,
+                    [StateEnum::IDLE, '1'] => StateEnum::RUNNING,
+                    [StateEnum::RUNNING, '0'] => StateEnum::STOPPED,
+                    [StateEnum::RUNNING, '1'] => StateEnum::IDLE,
+                    [StateEnum::STOPPED, '0'] => StateEnum::RUNNING,
+                    [StateEnum::STOPPED, '1'] => StateEnum::STOPPED,
+                    default => throw new \Error("Invalid transition"),
+                },
+            ],
+            'mixed types validation' => [
+                [0, 'ONE', 2],
+                0,
+                fn (int|string $state, string $symbol): int|string => match ([$state, $symbol]) {
+                    [0, '0'] => 0,
+                    [0, '1'] => 'ONE',
+                    ['ONE', '0'] => 2,
+                    ['ONE', '1'] => 0,
+                    [2, '0'] => 'ONE',
+                    [2, '1'] => 2,
+                    default => throw new \Error("Invalid transition"),
+                },
+            ],
+        ];
     }
 }
