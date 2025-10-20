@@ -11,6 +11,7 @@ use FSM\Exceptions\MissingTransitionException;
 use FSM\FiniteStateMachine;
 use FSM\Tests\Fixtures\StateEnum;
 use FSM\Tests\Fixtures\StateObject;
+use FSM\Tests\Fixtures\StateObjectWithoutToString;
 use PHPUnit\Framework\TestCase;
 
 class FiniteStateMachineTest extends TestCase
@@ -555,6 +556,38 @@ class FiniteStateMachineTest extends TestCase
                     default => throw new \Error("Invalid transition"),
                 },
             ],
+        ];
+    }
+
+    /**
+     * @dataProvider stateToStringDataProvider
+     *
+     * @param int|string|bool|float|object|array<array-key, mixed>|null $state
+     */
+    public function testStateToString(int|string|bool|float|object|array|null $state, string $expectedPattern): void
+    {
+        $result = FiniteStateMachine::stateToString($state);
+        $this->assertEquals($expectedPattern, $result);
+    }
+
+    /**
+     * @return array<string, array{int|string|bool|float|object|array<array-key, mixed>|null, string}>
+     */
+    public static function stateToStringDataProvider(): array
+    {
+        $objectWithToString = new StateObject('test-state');
+        $objectWithoutToString = new StateObjectWithoutToString('test');
+
+        return [
+            'integer state' => [42, '42'],
+            'string state' => ['S0', 'S0'],
+            'boolean true state' => [true, 'true'],
+            'boolean false state' => [false, 'false'],
+            'float state' => [3.14, '3.14'],
+            'null state' => [null, 'NULL'],
+            'array state' => [['key' => 'value'], 'Array'],
+            'object with __toString' => [$objectWithToString, 'test-state'],
+            'object without __toString' => [$objectWithoutToString, 'FSM\Tests\Fixtures\StateObjectWithoutToString'],
         ];
     }
 }

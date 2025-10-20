@@ -260,10 +260,16 @@ class FiniteStateMachine
     }
 
     /**
+     * Convert a state to its string representation for display in error messages.
+     *
      * @param int|string|bool|float|object|array<array-key, mixed>|null $state
      */
-    private static function stateToString(int|string|bool|float|object|array|null $state): string
+    public static function stateToString(int|string|bool|float|object|array|null $state): string
     {
+        if (\is_bool($state)) {
+            return $state ? 'true' : 'false';
+        }
+
         if (\is_scalar($state)) {
             return (string) $state;
         }
@@ -272,7 +278,7 @@ class FiniteStateMachine
             if ($state instanceof \Stringable || \method_exists($state, '__toString')) {
                 return (string) $state;
             }
-            return \get_class($state) . '#' . \spl_object_id($state);
+            return \get_class($state);
         }
 
         if (\is_array($state)) {

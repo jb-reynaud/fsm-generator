@@ -1,8 +1,7 @@
 # FSM Generator
 
 [![Quality Checks](https://github.com/jb-reynaud/fsm-generator/actions/workflows/quality.yml/badge.svg)](https://github.com/jb-reynaud/fsm-generator/actions/workflows/quality.yml)
-[![Code Coverage](https://github.com/jb-reynaud/fsm-generator/actions/workflows/coverage.yml/badge.svg)](https://github.com/jb-reynaud/fsm-generator/actions/workflows/coverage.yml)
-![Coverage](https://raw.githubusercontent.com/jb-reynaud/fsm-generator/main/output/coverage.svg)
+![Coverage](https://github.com/jb-reynaud/fsm-generator/blob/main/output/coverage.svg)
 [![PHP Version](https://img.shields.io/badge/PHP-8.1%20|%208.4-blue)](https://www.php.net/)
 
 A type-safe PHP library for creating Finite State Machines.
