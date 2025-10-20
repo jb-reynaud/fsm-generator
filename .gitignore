@@ -7,4 +7,3 @@ composer.lock
 .php-cs-fixer.cache
 phpstan.neon.cache
 coverage.xml
-/output/
