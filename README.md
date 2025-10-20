@@ -42,5 +42,10 @@ Quality checks are run with [PHPStan](https://github.com/phpstan/phpstan) & [Php
 ## Architecture Decision
 
 ### Validation Transition Function
-The **transitionFunction** is not validated on construction because it can be slow, if states and/or alphabet are big. The validation is made in the process method, after each transition is applied.
+The **transitionFunction** is not validating on construction because it can be slow, if states and/or alphabet are big. The validation is made in the process method, after each transition is applied.
 If you want to validate the **transitionFunction**, you can use the `validateTransitionFunction` method.
+
+### State type
+For the state's type, I switch from `mixed` to `int|string|bool|float|object|array|null` to exclude:
+- resource: Not serializable, comparison with === is unreliable
+- callable: No practical use case as a state

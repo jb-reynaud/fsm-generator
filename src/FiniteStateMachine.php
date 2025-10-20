@@ -22,7 +22,7 @@ use FSM\Exceptions\MissingTransitionException;
 class FiniteStateMachine
 {
     /**
-     * @var array<int, mixed> Set of states (Q)
+     * @var array<int, int|string|bool|float|object|array<array-key, mixed>|null> Set of states (Q)
      */
     private array $states;
 
@@ -32,12 +32,12 @@ class FiniteStateMachine
     private array $alphabet;
 
     /**
-     * @var mixed Initial state (q0)
+     * @var int|string|bool|float|object|array<array-key, mixed>|null Initial state (q0)
      */
-    private mixed $initialState;
+    private int|string|bool|float|object|array|null $initialState;
 
     /**
-     * @var array<int, mixed> Set of final/accepting states (F)
+     * @var array<int, int|string|bool|float|object|array<array-key, mixed>|null> Set of final/accepting states (F)
      */
     private array $finalStates;
 
@@ -47,25 +47,28 @@ class FiniteStateMachine
     private $transitionFunction;
 
     /**
-     * @var mixed
+     * @var int|string|bool|float|object|array<array-key, mixed>|null
      */
-    private mixed $currentState;
+    private int|string|bool|float|object|array|null $currentState;
 
     /**
      * Create a new Finite State Machine.
      *
-     * @param array<int, mixed> $states Set of all possible states
+     * @param array<int, int|string|bool|float|object|array<array-key, mixed>|null> $states Set of all possible states
      * @param array<string> $alphabet Set of input symbols
-     * @param mixed $initialState The initial state
-     * @param array<int, mixed> $finalStates Set of accepting states
+     * @param int|string|bool|float|object|array<array-key, mixed>|null $initialState The initial state
+     * @param array<int, int|string|bool|float|object|array<array-key, mixed>|null> $finalStates Set of accepting states
      * @param callable $transitionFunction Function (state, symbol) => nextState
+     *
+     * Supported state types: int, string, bool, float, object, array, null
+     * Note: resource and callable types are not supported as states
      *
      * @throws InvalidConfigurationException
      */
     public function __construct(
         array $states,
         array $alphabet,
-        mixed $initialState,
+        int|string|bool|float|object|array|null $initialState,
         array $finalStates,
         callable $transitionFunction
     ) {
@@ -110,8 +113,10 @@ class FiniteStateMachine
             throw new InvalidConfigurationException('Initial state must be in the states set.');
         }
 
-        if (!empty(\array_diff($this->finalStates, $this->states))) {
-            throw new InvalidConfigurationException('All final states must be in the states set.');
+        foreach ($this->finalStates as $finalState) {
+            if (!\in_array($finalState, $this->states, true)) {
+                throw new InvalidConfigurationException('All final states must be in the states set.');
+            }
         }
     }
 
@@ -146,13 +151,13 @@ class FiniteStateMachine
      * Process a sequence of input symbols and return the current state.
      *
      * @param string $input Sequence of input symbols as a string
-     * @return mixed The current state after processing the sequence
+     * @return int|string|bool|float|object|array<array-key, mixed>|null The current state after processing the sequence
      *
      * @throws InvalidSymbolException
      * @throws InvalidStateException
      * @throws MissingTransitionException
      */
-    public function processSequence(string $input): mixed
+    public function processSequence(string $input): int|string|bool|float|object|array|null
     {
         $savedState = $this->currentState;
 
@@ -215,7 +220,7 @@ class FiniteStateMachine
     }
 
     /**
-     * @return array<int, mixed>
+     * @return array<int, int|string|bool|float|object|array<array-key, mixed>|null>
      */
     public function getStates(): array
     {
@@ -230,28 +235,34 @@ class FiniteStateMachine
         return $this->alphabet;
     }
 
-    public function getInitialState(): mixed
+    /**
+     * @return int|string|bool|float|object|array<array-key, mixed>|null
+     */
+    public function getInitialState(): int|string|bool|float|object|array|null
     {
         return $this->initialState;
     }
 
     /**
-     * @return array<int, mixed>
+     * @return array<int, int|string|bool|float|object|array<array-key, mixed>|null>
      */
     public function getFinalStates(): array
     {
         return $this->finalStates;
     }
 
-    public function getCurrentState(): mixed
+    /**
+     * @return int|string|bool|float|object|array<array-key, mixed>|null
+     */
+    public function getCurrentState(): int|string|bool|float|object|array|null
     {
         return $this->currentState;
     }
 
     /**
-     * Convert a state to string for error messages.
+     * @param int|string|bool|float|object|array<array-key, mixed>|null $state
      */
-    private static function stateToString(mixed $state): string
+    private static function stateToString(int|string|bool|float|object|array|null $state): string
     {
         if (\is_scalar($state)) {
             return (string) $state;
