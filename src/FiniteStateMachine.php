@@ -60,9 +60,6 @@ class FiniteStateMachine
      * @param array<int, int|string|bool|float|object|array<array-key, mixed>|null> $finalStates Set of accepting states
      * @param callable $transitionFunction Function (state, symbol) => nextState
      *
-     * Supported state types: int, string, bool, float, object, array, null
-     * Note: resource and callable types are not supported as states
-     *
      * @throws InvalidConfigurationException
      */
     public function __construct(
@@ -79,6 +76,9 @@ class FiniteStateMachine
         $this->transitionFunction = $transitionFunction;
 
         $this->validateConfiguration();
+
+        \usort($this->alphabet, fn (string $a, string $b): int => \mb_strlen($b) <=> \mb_strlen($a));
+
         $this->reset();
     }
 
@@ -100,10 +100,8 @@ class FiniteStateMachine
         if (empty($this->alphabet)) {
             throw new InvalidConfigurationException('Alphabet cannot be empty.');
         }
-        foreach ($this->alphabet as $symbol) {
-            if (!\is_string($symbol) || \mb_strlen($symbol) !== 1) {
-                throw new InvalidConfigurationException('All symbols in alphabet must be string and exactly one character long.');
-            }
+        if (\in_array('', $this->alphabet, true)) {
+            throw new InvalidConfigurationException('All symbols in alphabet must be non-empty strings.');
         }
         if (\count($this->alphabet) !== \count(\array_unique($this->alphabet))) {
             throw new InvalidConfigurationException('All symbols in alphabet must be unique.');
@@ -148,6 +146,55 @@ class FiniteStateMachine
     }
 
     /**
+     * Tokenize input string using greedy matching (longest match first).
+     *
+     * This method uses a greedy algorithm to parse the input string into symbols.
+     * At each position, it tries to match the longest possible symbol from the alphabet.
+     *
+     * Example: For alphabet ['a', 'aa', 'aab'] and input 'aab':
+     * - Returns ['aab'] (not ['aa', 'b'] or ['a', 'a', 'b'])
+     *
+     * @param string $input The input string to tokenize
+     * @return array<int, string> Array of matched symbols
+     *
+     * @throws InvalidSymbolException
+     */
+    private function tokenizeInput(string $input): array
+    {
+        $tokens = [];
+        $position = 0;
+        $inputLength = \mb_strlen($input);
+
+        while ($position < $inputLength) {
+            $matched = false;
+
+            foreach ($this->alphabet as $symbol) {
+                $symbolLength = \mb_strlen($symbol);
+
+                if ($position + $symbolLength <= $inputLength) {
+                    $substring = \mb_substr($input, $position, $symbolLength);
+
+                    if ($substring === $symbol) {
+                        $tokens[] = $symbol;
+                        $position += $symbolLength;
+                        $matched = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!$matched) {
+                $remainingInput = \mb_substr($input, $position);
+                throw new InvalidSymbolException(
+                    \sprintf('Cannot tokenize input at position %d. Remaining input: "%s"', $position, $remainingInput)
+                );
+            }
+        }
+
+        return $tokens;
+    }
+
+    /**
      * Process a sequence of input symbols and return the current state.
      *
      * @param string $input Sequence of input symbols as a string
@@ -161,12 +208,8 @@ class FiniteStateMachine
     {
         $savedState = $this->currentState;
 
-        if ($input === '') {
-            return $savedState;
-        }
-
         try {
-            foreach (\str_split($input) as $symbol) {
+            foreach ($this->tokenizeInput($input) as $symbol) {
                 $this->process($symbol);
             }
         } catch (\Exception $e) {

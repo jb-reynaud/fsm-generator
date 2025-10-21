@@ -179,19 +179,12 @@ class FiniteStateMachineTest extends TestCase
                 ['S0'],
                 'Alphabet cannot be empty',
             ],
-            'alphabet with multi-character symbol' => [
-                ['S0'],
-                ['0', 'ab', '2'],
-                'S0',
-                ['S0'],
-                'All symbols in alphabet must be string and exactly one character long',
-            ],
             'alphabet with empty string' => [
                 ['S0'],
                 ['0', '', '2'],
                 'S0',
                 ['S0'],
-                'All symbols in alphabet must be string and exactly one character long',
+                'All symbols in alphabet must be non-empty strings',
             ],
             'alphabet with duplicate symbols' => [
                 ['S0'],
@@ -557,6 +550,149 @@ class FiniteStateMachineTest extends TestCase
                 },
             ],
         ];
+    }
+
+    /**
+     * Test FSM with multi-character symbols
+     *
+     * @throws InvalidConfigurationException
+     * @throws InvalidSymbolException
+     * @throws InvalidStateException
+     * @throws MissingTransitionException
+     */
+    public function testMultiCharacterSymbols(): void
+    {
+        $fsm = new FiniteStateMachine(
+            states: ['S0', 'S1', 'S2'],
+            alphabet: ['hello', 'world', ' '],
+            initialState: 'S0',
+            finalStates: ['S2'],
+            transitionFunction: fn (string $state, string $symbol): string => match ([$state, $symbol]) {
+                ['S0', 'hello'] => 'S1',
+                ['S1', ' '] => 'S1',
+                ['S1', 'world'] => 'S2',
+                default => throw new \Error("Invalid transition"),
+            }
+        );
+
+        $result = $fsm->processSequence('hello world');
+        $this->assertEquals('S2', $result);
+    }
+
+    /**
+     * Test greedy tokenization with overlapping prefixes
+     *
+     * @throws InvalidConfigurationException
+     * @throws InvalidSymbolException
+     * @throws InvalidStateException
+     * @throws MissingTransitionException
+     */
+    public function testGreedyTokenizationWithPrefixes(): void
+    {
+        $fsm = new FiniteStateMachine(
+            states: ['S0', 'S1', 'S2', 'S3'],
+            alphabet: ['a', 'aa', 'aab'],
+            initialState: 'S0',
+            finalStates: ['S0', 'S1', 'S2', 'S3'],
+            transitionFunction: fn (string $state, string $symbol): string => match ([$state, $symbol]) {
+                ['S0', 'aab'] => 'S1',
+                ['S1', 'aa'] => 'S2',
+                ['S2', 'a'] => 'S3',
+                ['S0', 'a'] => 'S0',
+                ['S0', 'aa'] => 'S0',
+                default => throw new \Error("Invalid transition"),
+            }
+        );
+
+        // 'aab' should match 'aab' (greedy), not 'aa' + 'b' or 'a' + 'a' + 'b'
+        // 'aaa' should match 'aa' + 'a' (greedy)
+        $result = $fsm->processSequence('aabaaa');
+        $this->assertEquals('S3', $result);
+    }
+
+    /**
+     * Test tokenization error when no symbol matches
+     *
+     * @throws InvalidConfigurationException
+     */
+    public function testTokenizationErrorNoMatch(): void
+    {
+        $fsm = new FiniteStateMachine(
+            states: ['S0', 'S1'],
+            alphabet: ['hello', 'world'],
+            initialState: 'S0',
+            finalStates: ['S1'],
+            transitionFunction: fn (string $state, string $symbol): string => match ([$state, $symbol]) {
+                ['S0', 'hello'] => 'S1',
+                ['S1', 'world'] => 'S0',
+                default => throw new \Error("Invalid transition"),
+            }
+        );
+
+        $this->expectException(InvalidSymbolException::class);
+        $this->expectExceptionMessageMatches('/Cannot tokenize input at position/');
+        $fsm->processSequence('helloXworld');
+    }
+
+    /**
+     * Test validateAllTransitions with multi-character alphabet
+     *
+     * @throws InvalidConfigurationException
+     * @throws InvalidStateException
+     * @throws MissingTransitionException
+     */
+    public function testValidateAllTransitionsWithMultiCharacterAlphabet(): void
+    {
+        $fsm = new FiniteStateMachine(
+            states: ['idle', 'running', 'stopped'],
+            alphabet: ['start', 'stop', 'reset'],
+            initialState: 'idle',
+            finalStates: ['stopped'],
+            transitionFunction: fn (string $state, string $symbol): string => match ([$state, $symbol]) {
+                ['idle', 'start'] => 'running',
+                ['idle', 'stop'] => 'idle',
+                ['idle', 'reset'] => 'idle',
+                ['running', 'start'] => 'running',
+                ['running', 'stop'] => 'stopped',
+                ['running', 'reset'] => 'idle',
+                ['stopped', 'start'] => 'running',
+                ['stopped', 'stop'] => 'stopped',
+                ['stopped', 'reset'] => 'idle',
+                default => throw new \Error("Invalid transition"),
+            }
+        );
+
+        $fsm->validateAllTransitions();
+        $this->assertEquals('idle', $fsm->getCurrentState());
+    }
+
+    /**
+     * Test greedy matching prefers longest match
+     *
+     * @throws InvalidConfigurationException
+     * @throws InvalidSymbolException
+     * @throws InvalidStateException
+     * @throws MissingTransitionException
+     */
+    public function testGreedyMatchingPrefersLongestMatch(): void
+    {
+        $callLog = [];
+
+        $fsm = new FiniteStateMachine(
+            states: ['S0'],
+            alphabet: ['a', 'aa', 'aaa'],
+            initialState: 'S0',
+            finalStates: ['S0'],
+            transitionFunction: function (string $state, string $symbol) use (&$callLog): string {
+                $callLog[] = $symbol;
+                return 'S0';
+            }
+        );
+
+        $fsm->processSequence('aaaaaa');
+
+        // Should match 'aaa' + 'aaa' (greedy), not 'aa' + 'aa' + 'aa' or 'a' * 6
+        $this->assertEquals(['aaa', 'aaa'], $callLog);
     }
 
     /**
